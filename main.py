@@ -3,6 +3,8 @@ import json
 # Press Shift+F10 to execute it or replace it with your code.
 # Press Double Shift to search everywhere for classes, files, tool windows, actions, and settings.
 import os
+import jwt
+import time
 import discord
 import requests
 import random
@@ -18,9 +20,21 @@ bot = commands.Bot(command_prefix='!', intents=intents)
 
 discord_token = os.getenv('DISCORD_TOKEN')
 api_base_url = os.getenv('API_BASE_URL')
+secret_key = os.getenv('SECRET_KEY')
+jwt_algorithm = os.getenv('JWT_ALGORITHM')
 
 # Dictionary to store the JWT tokens associated with Discord IDs
 user_tokens = {}
+
+
+def validate_jwt_token(token):
+    try:
+        payload = jwt.decode(token, secret_key, algorithms=jwt_algorithm)
+        return True, payload
+    except jwt.ExpiredSignatureError:
+        return False, "Token is expired. Please log in again."
+    except jwt.InvalidTokenError:
+        return False, "Invalid token. Please log in again."
 
 
 @bot.event
@@ -38,11 +52,33 @@ async def loginid(ctx):
         await ctx.send("This command can only be used in DMs.")
         return
 
+    existing_token = user_tokens.get(ctx.author.id)
+    if existing_token:
+        is_valid, token_status = validate_jwt_token(existing_token["token"])
+        if is_valid:
+            await ctx.send("You are already logged in.")
+            return
+        else:
+            if token_status == "Token is expired. Please log in again.":
+                # remove the expired token
+                del user_tokens[ctx.author.id]
+            else:
+                await ctx.send("There was an issue with your session. Please log in again.")
+                return
+
     url = f'{api_base_url}/Gebruiker/Login'
-    await ctx.send("Please enter your ID:")
+    await ctx.send("Please enter your ID (or type 'STOP' to cancel):")
     id = await bot.wait_for('message', check=lambda message: message.author == ctx.author)
-    await ctx.send("Please enter your code:")
+    if id.content.upper() == "STOP":
+        await ctx.send("Login cancelled.")
+        return
+
+    await ctx.send("Please enter your code (or type 'STOP' to cancel):")
     code = await bot.wait_for('message', check=lambda message: message.author == ctx.author)
+    if code.content.upper() == "STOP":
+        await ctx.send("Login cancelled.")
+        return
+
     data = {"gebruikerId": id.content, "code": code.content}
     response = requests.post(url, json=data, verify=True)
     if response.ok:
@@ -65,11 +101,33 @@ async def loginemail(ctx):
         await ctx.send("This command can only be used in DMs.")
         return
 
+    existing_token = user_tokens.get(ctx.author.id)
+    if existing_token:
+        is_valid, token_status = validate_jwt_token(existing_token["token"])
+        if is_valid:
+            await ctx.send("You are already logged in.")
+            return
+        else:
+            if token_status == "Token is expired. Please log in again.":
+                # remove the expired token
+                del user_tokens[ctx.author.id]
+            else:
+                await ctx.send("There was an issue with your session. Please log in again.")
+                return
+
     url = f'{api_base_url}/Gebruiker/loginEmail'
-    await ctx.send("Please enter your e-mail:")
+    await ctx.send("Please enter your e-mail (or type 'STOP' to cancel):")
     email = await bot.wait_for('message', check=lambda message: message.author == ctx.author)
-    await ctx.send("Please enter your password:")
+    if email.content.upper() == "STOP":
+        await ctx.send("Login cancelled.")
+        return
+
+    await ctx.send("Please enter your password (or type 'STOP' to cancel):")
     password = await bot.wait_for('message', check=lambda message: message.author == ctx.author)
+    if password.content.upper() == "STOP":
+        await ctx.send("Login cancelled.")
+        return
+
     data = {"email": email.content, "password": password.content}
     response = requests.post(url, json=data, verify=True)
     if response.ok:
@@ -83,18 +141,9 @@ async def loginemail(ctx):
         await ctx.send(f'Error {response.status_code}')
 
 
-async def get_rekening(ctx, rekening_id, discord_id):
-    token = user_tokens.get(discord_id)
-    if not token:
-        await ctx.send("You need to log in first.")
-        return None
-
-    headers = {
-        'Content-Type': 'application/json',
-        'Authorization': f'Bearer {token}'
-    }
-    url = f'{api_base_url}/Rekening/{rekening_id}'
-    response = requests.get(url, headers=headers)
+async def get_rekening(ctx, rekening_id, depth=0):
+    url = f'{api_base_url}/Rekening/{rekening_id}?depth={depth}'
+    response = requests.get(url)
 
     if response.ok:
         try:
@@ -109,68 +158,138 @@ async def get_rekening(ctx, rekening_id, discord_id):
 
 
 @bot.command(
-    brief="Get information about a Rekening by ID.",
-    help="To use this command, type: !get <ID>"
+    brief="Get information about a Rekening by ID and an optional depth for transactions.",
+    help="To use this command, type: !get <ID> <depth: optional> "
 )
-async def get(ctx, rekening_id: str):
+async def get(ctx):
     if not isinstance(ctx.channel, discord.DMChannel):
         await ctx.send("This command can only be used in DMs.")
         return
 
-    if not rekening_id:
-        await ctx.send("Please provide a Rekening ID.")
+    token = user_tokens.get(ctx.author.id)
+    if not token:
+        await ctx.send("You need to log in first.")
+        return None
+
+    # Validate the JWT token
+    is_valid, message = validate_jwt_token(token["token"])
+    if not is_valid:
+        await ctx.send(message)
+        return None
+
+    await ctx.send("Please enter the rekening ID (or type 'STOP' to cancel):")
+    id = await bot.wait_for('message', check=lambda message: message.author == ctx.author)
+    if id.content.upper() == "STOP":
+        await ctx.send("request cancelled.")
         return
 
-    rekening = await get_rekening(ctx, rekening_id, ctx.author.id)
+    await ctx.send("Please enter the depth of transactions or enter 0 if none (or type 'STOP' to cancel):")
+    depth = await bot.wait_for('message', check=lambda message: message.author == ctx.author)
+    if depth.content.upper() == "STOP":
+        await ctx.send("Request cancelled.")
+        return
+
+    rekening = await get_rekening(ctx, id.content, depth.content)
     if rekening:
         # Customize the output message based on the received Rekening data.
         rekening_info = rekening["gebruiker"]
-        adres_info = rekening_info["adres"]
+        if rekening_info['id'] != token['gebruiker']['id']:
+            await ctx.send("Unauthorized.")
+            return None
+        else:
+            transaction_types = {0: "Inkomend", 1: "Uitgaand"}
+            adres_info = rekening_info["adres"]
+            response = (
+                f"Rekening Information:\n"
+                f"Rekening ID: {rekening['rekeningnummer']}\n"
+                f"Rekening Type: {rekening['rekeningType']}\n"
+                f"Kredietlimiet: {rekening['kredietLimiet']}\n"
+                f"Saldo: {rekening['saldo']}\n"
+                f"Currency: {rekening['currency']}\n\n"
+                f"Gebruiker Information:\n"
+                f"ID: {rekening_info['id']}\n"
+                f"Naam: {rekening_info['voornaam']} {rekening_info['familienaam']}\n"
+                f"Email: {rekening_info['email']}\n"
+                f"Telefoonnummer: {rekening_info['telefoonnummer']}\n"
+                f"Geboortedatum: {rekening_info['geboortedatum']}\n\n"
+                f"Adres Information:\n"
+                f"Straat: {adres_info['straat']} {adres_info['huisnummer']}\n"
+                f"Postcode: {adres_info['postcode']}\n"
+                f"Gemeente: {adres_info['gemeente']}\n"
+                f"Land: {adres_info['land']}"
+            )
 
-        response = (
-            f"Rekening Information:\n"
-            f"Rekening ID: {rekening['rekeningnummer']}\n"
-            f"Rekening Type: {rekening['rekeningType']}\n"
-            f"Kredietlimiet: {rekening['kredietLimiet']}\n"
-            f"Saldo: {rekening['saldo']}\n"
-            f"Currency: {rekening['currency']}\n\n"
-            f"Gebruiker Information:\n"
-            f"ID: {rekening_info['id']}\n"
-            f"Naam: {rekening_info['voornaam']} {rekening_info['familienaam']}\n"
-            f"Email: {rekening_info['email']}\n"
-            f"Telefoonnummer: {rekening_info['telefoonnummer']}\n"
-            f"Geboortedatum: {rekening_info['geboortedatum']}\n\n"
-            f"Adres Information:\n"
-            f"Straat: {adres_info['straat']} {adres_info['huisnummer']}\n"
-            f"Postcode: {adres_info['postcode']}\n"
-            f"Gemeente: {adres_info['gemeente']}\n"
-            f"Land: {adres_info['land']}"
-        )
+            if depth.content.isdigit() and int(depth.content) > 0:
+                transacties = rekening["transacties"]
+                if transacties:
+                    response += "\n\nTransacties:\n"
+                    for transactie in transacties[:int(depth.content)]:
+                        transactie_type = transaction_types.get(transactie['transactieType'], 'Unknown')
+                        response += (
+                            f"\nTransactie ID: {transactie['transactieId']}\n"
+                            f"Bedrag: {transactie['bedrag']}\n"
+                            f"Datum: {transactie['datum']}\n"
+                            f"Omschrijving: {transactie['omschrijving']}\n"
+                            f"Transactie Type: {transactie_type}\n"
+                        )
 
-        await ctx.send(response)
+            await ctx.send(response)
 
 
 @bot.command(
     brief="Transfer money between two Rekening accounts.",
     help="To use this command, type: !transfer <sender> <recipient> <amount> <currency> <description: optional>"
 )
-async def transfer(ctx, from_id: str, to_id: str, amount: float, currency: str, description: str = None):
+async def transfer(ctx):
     if not isinstance(ctx.channel, discord.DMChannel):
         await ctx.send("This command can only be used in DMs.")
-        return
-
-    if not (from_id and to_id and amount and currency):
-        await ctx.send("Please provide From Rekening ID, To Rekening ID, Amount and Currency(EUR,USD,...)")
-        return
-
-    if amount <= 0:
-        await ctx.send("Amount must be greater than 0.")
         return
 
     token = user_tokens.get(ctx.author.id)
     if not token:
         await ctx.send("You need to log in first.")
         return
+
+    # Validate the JWT token
+    is_valid, validation_message = validate_jwt_token(token["token"])
+    if not is_valid:
+        await ctx.send(validation_message)
+        return None
+
+    await ctx.send("Please enter the sender Rekening IBAN (or type 'STOP' to cancel):")
+    from_iban = await bot.wait_for('message', check=lambda message: message.author == ctx.author)
+    if from_iban.content.upper() == "STOP":
+        await ctx.send("Transfer cancelled.")
+        return
+
+    await ctx.send("Please enter the recipient Rekening IBAN (or type 'STOP' to cancel):")
+    to_iban = await bot.wait_for('message', check=lambda message: message.author == ctx.author)
+    if to_iban.content.upper() == "STOP":
+        await ctx.send("Transfer cancelled.")
+        return
+
+    await ctx.send("Please enter the amount to transfer (or type 'STOP' to cancel):")
+    amount_message = await bot.wait_for('message', check=lambda message: message.author == ctx.author)
+    if amount_message.content.upper() == "STOP":
+        await ctx.send("Transfer cancelled.")
+        return
+
+    amount = float(amount_message.content)
+    if amount <= 0:
+        await ctx.send("Amount must be greater than 0.")
+        return
+
+    await ctx.send("Please enter the currency as <XXX>(or type 'STOP' to cancel):")
+    currency = await bot.wait_for('message', check=lambda message: message.author == ctx.author)
+    if currency.content.upper() == "STOP":
+        await ctx.send("Transfer cancelled.")
+        return
+
+    await ctx.send("Please enter the transfer description (or type 'SKIP' to skip):")
+    description_message = await bot.wait_for('message', check=lambda message: message.author == ctx.author)
+    description = None
+    if description_message.content.upper() != "SKIP":
+        description = description_message.content
 
     headers = {
         'Content-Type': 'application/json',
@@ -179,11 +298,11 @@ async def transfer(ctx, from_id: str, to_id: str, amount: float, currency: str, 
 
     url = f'{api_base_url}/Rekening/transactie'
     data = {
-        "From": from_id,
-        "To": to_id,
-        "Amount": amount,
-        "Currency": currency,
-        "Description": description
+        "from": from_iban.content,
+        "to": to_iban.content,
+        "amount": amount,
+        "currency": currency.content,
+        "description": description
     }
     response = requests.post(url, json=data, headers=headers)
 
@@ -202,12 +321,18 @@ async def info(ctx):
         await ctx.send("This command can only be used in DMs.")
         return
 
-    user_info = user_tokens.get(ctx.author.id)
-    if not user_info:
+    token = user_tokens.get(ctx.author.id)
+    if not token:
         await ctx.send("You need to log in first.")
         return
 
-    gebruiker = user_info["gebruiker"]
+    # Validate the JWT token
+    is_valid, validation_message = validate_jwt_token(token["token"])
+    if not is_valid:
+        await ctx.send(validation_message)
+        return None
+
+    gebruiker = token["gebruiker"]
 
     response_message = "User Information:\n"
     response_message += f"ID: {gebruiker['id']}\n"
@@ -251,14 +376,91 @@ async def add(ctx):
         await ctx.send("This command can only be used in DMs.")
         return
 
-    user_info = user_tokens.get(ctx.author.id)
-    if not user_info:
+    token = user_tokens.get(ctx.author.id)
+    if not token:
         await ctx.send("You need to log in first.")
         return
 
-    data={
-        "RekeningType":
+    # Validate the JWT token
+    is_valid, validation_message = validate_jwt_token(token["token"])
+    if not is_valid:
+        await ctx.send(validation_message)
+        return None
+
+    gebruiker = token["gebruiker"]
+
+    # Function to ask the user for input and check for "STOP"
+    async def ask_for_input(prompt):
+        while True:
+            await ctx.send(prompt)
+            inputresponse = await bot.wait_for('message', check=lambda message: message.author == ctx.author)
+            if inputresponse.content.upper() == 'STOP':
+                return None
+            if inputresponse.content:  # Here you can add more conditions to check the validity of the response
+                return inputresponse.content
+            await ctx.send("Invalid input. Please try again or type 'STOP' to cancel.")
+
+    accounttype = await ask_for_input("Please enter the account type you'd like to make:")
+    if accounttype is None:
+        return
+
+    iban = await ask_for_input("Please enter a valid IBAN:")
+    if iban is None:
+        return
+
+    credit = await ask_for_input("Please enter the credit you'd like:")
+    if credit is None:
+        return
+
+    currency = await ask_for_input("Please enter the desired currency, in capitalized <XXX> format:")
+    if currency is None:
+        return
+
+    url = f'{api_base_url}/Rekening'
+    data = {
+        "gebruikerId": gebruiker['id'],
+        "rekeningType": int(accounttype),
+        "iban": iban,
+        "kredietLimiet": credit,
+        "currency": currency
     }
+
+    headers = {
+        'Content-Type': 'application/json',
+        'Authorization': f'Bearer {token}'
+    }
+
+    response = requests.post(url, json=data, headers=headers)
+    print(response.content)
+    if response.ok:
+        response_data = response.json()
+        account_info = response_data['rekeningnummer']
+        account_type = response_data['rekeningType']
+        account_credit = response_data['kredietLimiet']
+        account_currency = response_data['currency']
+        account_iban = response_data['iban']
+
+        user_firstname = response_data['gebruiker']['voornaam']
+        user_lastname = response_data['gebruiker']['familienaam']
+        user_email = response_data['gebruiker']['email']
+
+        await ctx.send(
+            f"Account creation successful! 🎉\n"
+            f"\nDetails:\n"
+            f"Account Number: {account_info}\n"
+            f"IBAN: {account_iban}\n"
+            f"Account Type: {account_type}\n"
+            f"Credit Limit: {account_credit} {account_currency}\n"
+            f"\nUser Details:\n"
+            f"Name: {user_firstname} {user_lastname}\n"
+            f"Email: {user_email}\n"
+            f"\nHappy banking!"
+        )
+    else:
+        await ctx.send("Sorry, something went wrong with creating your account. Please try again.")
+
+        
+
 
 bot.run(discord_token)
 
