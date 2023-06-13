@@ -141,8 +141,8 @@ async def loginemail(ctx):
         await ctx.send(f'Error {response.status_code}')
 
 
-async def get_rekening(ctx, rekening_id, depth=0):
-    url = f'{api_base_url}/Rekening/{rekening_id}?depth={depth}'
+async def get_rekening(ctx, rekening_iban, depth=0):
+    url = f'{api_base_url}/Rekening/{rekening_iban}?depth={depth}'
     response = requests.get(url)
 
     if response.ok:
@@ -177,9 +177,9 @@ async def get(ctx):
         await ctx.send(message)
         return None
 
-    await ctx.send("Please enter the rekening ID (or type 'STOP' to cancel):")
-    id = await bot.wait_for('message', check=lambda message: message.author == ctx.author)
-    if id.content.upper() == "STOP":
+    await ctx.send("Please enter the IBAN (or type 'STOP' to cancel):")
+    iban = await bot.wait_for('message', check=lambda message: message.author == ctx.author)
+    if iban.content.upper() == "STOP":
         await ctx.send("request cancelled.")
         return
 
@@ -189,7 +189,7 @@ async def get(ctx):
         await ctx.send("Request cancelled.")
         return
 
-    rekening = await get_rekening(ctx, id.content, depth.content)
+    rekening = await get_rekening(ctx, iban.content, depth.content)
     if rekening:
         # Customize the output message based on the received Rekening data.
         rekening_info = rekening["gebruiker"]
@@ -458,8 +458,6 @@ async def add(ctx):
         )
     else:
         await ctx.send("Sorry, something went wrong with creating your account. Please try again.")
-
-        
 
 
 bot.run(discord_token)
