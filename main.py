@@ -1,4 +1,5 @@
 # This is a sample Python script.
+import asyncio
 import json
 # Press Shift+F10 to execute it or replace it with your code.
 # Press Double Shift to search everywhere for classes, files, tool windows, actions, and settings.
@@ -43,11 +44,111 @@ async def on_command_error(ctx, error):
         await ctx.send("Invalid command. Please try again.")
 
 
+# @bot.command(
+#     brief='Command to login to the Nestrix backend.',
+#     help="To use this command, type: !login and provide info when asked."
+# )
+# async def loginid(ctx):
+#     if not isinstance(ctx.channel, discord.DMChannel):
+#         await ctx.send("This command can only be used in DMs.")
+#         return
+#
+#     existing_token = user_tokens.get(ctx.author.id)
+#     if existing_token:
+#         is_valid, token_status = validate_jwt_token(existing_token["token"])
+#         if is_valid:
+#             await ctx.send("You are already logged in.")
+#             return
+#         else:
+#             if token_status == "Token is expired. Please log in again.":
+#                 # remove the expired token
+#                 del user_tokens[ctx.author.id]
+#             else:
+#                 await ctx.send("There was an issue with your session. Please log in again.")
+#                 return
+#
+#     url = f'{api_base_url}/Gebruiker/Login'
+#     await ctx.send("Please enter your ID (or type 'STOP' to cancel):")
+#     id = await bot.wait_for('message', check=lambda message: message.author == ctx.author)
+#     if id.content.upper() == "STOP":
+#         await ctx.send("Login cancelled.")
+#         return
+#
+#     await ctx.send("Please enter your code (or type 'STOP' to cancel):")
+#     code = await bot.wait_for('message', check=lambda message: message.author == ctx.author)
+#     if code.content.upper() == "STOP":
+#         await ctx.send("Login cancelled.")
+#         return
+#
+#     data = {"gebruikerId": id.content, "code": code.content}
+#     response = requests.post(url, json=data, verify=True)
+#     if response.ok:
+#         try:
+#             result = response.json()
+#             user_tokens[ctx.author.id] = {"token": result['token'], "gebruiker": result['gebruiker']}
+#             await ctx.send(result['message'])
+#         except json.JSONDecodeError as e:
+#             await ctx.send(f'Error decoding JSON response: {str(e)}')
+#     else:
+#         await ctx.send(f'Error {response.status_code}')
+#
+#
+# @bot.command(
+#     brief='Command to login to the Nestrix Backend via e-mail.',
+#     help="To use this command, type: !loginEmail and provide info when asked"
+# )
+# async def loginemail(ctx):
+#     if not isinstance(ctx.channel, discord.DMChannel):
+#         await ctx.send("This can only be used in DMs.")
+#         await ctx.author.send("You can only use my commands in direct messages.")
+#         return
+#
+#     existing_token = user_tokens.get(ctx.author.id)
+#     if existing_token:
+#         is_valid, token_status = validate_jwt_token(existing_token["token"])
+#         if is_valid:
+#             await ctx.send("You are already logged in.")
+#             return
+#         else:
+#             if token_status == "Token is expired. Please log in again.":
+#                 # remove the expired token
+#                 del user_tokens[ctx.author.id]
+#             else:
+#                 await ctx.send("There was an issue with your session. Please log in again.")
+#                 return
+#
+#     url = f'{api_base_url}/Gebruiker/loginEmail'
+#     await ctx.send("Please enter your e-mail (or type 'STOP' to cancel):")
+#     email = await bot.wait_for('message', check=lambda message: message.author == ctx.author)
+#     if email.content.upper() == "STOP":
+#         await ctx.send("Login cancelled.")
+#         return
+#
+#     await ctx.send("Please enter your password (or type 'STOP' to cancel):")
+#     password = await bot.wait_for('message', check=lambda message: message.author == ctx.author)
+#     if password.content.upper() == "STOP":
+#         await ctx.send("Login cancelled.")
+#         return
+#
+#     data = {"email": email.content, "password": password.content}
+#     response = requests.post(url, json=data, verify=True)
+#
+#     if response.ok:
+#         try:
+#             result = response.json()
+#             user_tokens[ctx.author.id] = {"token": result['token'], "gebruiker": result['gebruiker']}
+#             await ctx.send(result['message'])
+#         except json.JSONDecodeError as e:
+#             await ctx.send(f'Error decoding JSON response: {str(e)}')
+#     else:
+#         await ctx.send(f'Error {response.status_code}')
+
+
 @bot.command(
-    brief='Command to login to the Nestrix backend.',
+    brief='Command to login to the Nestrix Backend.',
     help="To use this command, type: !login and provide info when asked."
 )
-async def loginid(ctx):
+async def login(ctx):
     if not isinstance(ctx.channel, discord.DMChannel):
         await ctx.send("This command can only be used in DMs.")
         return
@@ -66,69 +167,48 @@ async def loginid(ctx):
                 await ctx.send("There was an issue with your session. Please log in again.")
                 return
 
-    url = f'{api_base_url}/Gebruiker/Login'
-    await ctx.send("Please enter your ID (or type 'STOP' to cancel):")
-    id = await bot.wait_for('message', check=lambda message: message.author == ctx.author)
-    if id.content.upper() == "STOP":
+    await ctx.send("Select login method: Type 'ID' for ID login or 'EMAIL' for Email login (or type 'STOP' to cancel):")
+    method = await bot.wait_for('message', check=lambda message: message.author == ctx.author)
+    if method.content.upper() == "STOP":
         await ctx.send("Login cancelled.")
         return
 
-    await ctx.send("Please enter your code (or type 'STOP' to cancel):")
-    code = await bot.wait_for('message', check=lambda message: message.author == ctx.author)
-    if code.content.upper() == "STOP":
-        await ctx.send("Login cancelled.")
-        return
+    if method.content.upper() == "ID":
+        url = f'{api_base_url}/Gebruiker/Login'
+        await ctx.send("Please enter your ID (or type 'STOP' to cancel):")
+        id = await bot.wait_for('message', check=lambda message: message.author == ctx.author)
+        if id.content.upper() == "STOP":
+            await ctx.send("Login cancelled.")
+            return
 
-    data = {"gebruikerId": id.content, "code": code.content}
-    response = requests.post(url, json=data, verify=True)
-    if response.ok:
-        try:
-            result = response.json()
-            user_tokens[ctx.author.id] = {"token": result['token'], "gebruiker": result['gebruiker']}
-            await ctx.send(result['message'])
-        except json.JSONDecodeError as e:
-            await ctx.send(f'Error decoding JSON response: {str(e)}')
+        await ctx.send("Please enter your code (or type 'STOP' to cancel):")
+        code = await bot.wait_for('message', check=lambda message: message.author == ctx.author)
+        if code.content.upper() == "STOP":
+            await ctx.send("Login cancelled.")
+            return
+
+        data = {"gebruikerId": id.content, "code": code.content}
+
+    elif method.content.upper() == "EMAIL":
+        url = f'{api_base_url}/Gebruiker/loginEmail'
+        await ctx.send("Please enter your e-mail (or type 'STOP' to cancel):")
+        email = await bot.wait_for('message', check=lambda message: message.author == ctx.author)
+        if email.content.upper() == "STOP":
+            await ctx.send("Login cancelled.")
+            return
+
+        await ctx.send("Please enter your password (or type 'STOP' to cancel):")
+        password = await bot.wait_for('message', check=lambda message: message.author == ctx.author)
+        if password.content.upper() == "STOP":
+            await ctx.send("Login cancelled.")
+            return
+
+        data = {"email": email.content, "password": password.content}
+
     else:
-        await ctx.send(f'Error {response.status_code}')
-
-
-@bot.command(
-    brief='Command to login to the Nestrix Backend via e-mail.',
-    help="To use this command, type: !loginEmail and provide info when asked"
-)
-async def loginemail(ctx):
-    if not isinstance(ctx.channel, discord.DMChannel):
-        await ctx.send("This command can only be used in DMs.")
+        await ctx.send("Invalid method.")
         return
 
-    existing_token = user_tokens.get(ctx.author.id)
-    if existing_token:
-        is_valid, token_status = validate_jwt_token(existing_token["token"])
-        if is_valid:
-            await ctx.send("You are already logged in.")
-            return
-        else:
-            if token_status == "Token is expired. Please log in again.":
-                # remove the expired token
-                del user_tokens[ctx.author.id]
-            else:
-                await ctx.send("There was an issue with your session. Please log in again.")
-                return
-
-    url = f'{api_base_url}/Gebruiker/loginEmail'
-    await ctx.send("Please enter your e-mail (or type 'STOP' to cancel):")
-    email = await bot.wait_for('message', check=lambda message: message.author == ctx.author)
-    if email.content.upper() == "STOP":
-        await ctx.send("Login cancelled.")
-        return
-
-    await ctx.send("Please enter your password (or type 'STOP' to cancel):")
-    password = await bot.wait_for('message', check=lambda message: message.author == ctx.author)
-    if password.content.upper() == "STOP":
-        await ctx.send("Login cancelled.")
-        return
-
-    data = {"email": email.content, "password": password.content}
     response = requests.post(url, json=data, verify=True)
     if response.ok:
         try:
@@ -199,41 +279,71 @@ async def get(ctx):
         else:
             transaction_types = {0: "Inkomend", 1: "Uitgaand"}
             adres_info = rekening_info["adres"]
-            response = (
-                f"Rekening Information:\n"
-                f"Rekening ID: {rekening['rekeningnummer']}\n"
-                f"Rekening Type: {rekening['rekeningType']}\n"
-                f"Kredietlimiet: {rekening['kredietLimiet']}\n"
-                f"Saldo: {rekening['saldo']}\n"
-                f"Currency: {rekening['currency']}\n\n"
-                f"Gebruiker Information:\n"
-                f"ID: {rekening_info['id']}\n"
-                f"Naam: {rekening_info['voornaam']} {rekening_info['familienaam']}\n"
-                f"Email: {rekening_info['email']}\n"
-                f"Telefoonnummer: {rekening_info['telefoonnummer']}\n"
-                f"Geboortedatum: {rekening_info['geboortedatum']}\n\n"
-                f"Adres Information:\n"
-                f"Straat: {adres_info['straat']} {adres_info['huisnummer']}\n"
-                f"Postcode: {adres_info['postcode']}\n"
-                f"Gemeente: {adres_info['gemeente']}\n"
-                f"Land: {adres_info['land']}"
-            )
+            embed = discord.Embed(title="Rekening Information", color=0x00ff00)
+            embed.add_field(name="Rekening ID", value=rekening['rekeningnummer'], inline=False)
+            embed.add_field(name="Rekening Type", value=rekening['rekeningType'], inline=False)
+            embed.add_field(name="Kredietlimiet", value=rekening['kredietLimiet'], inline=False)
+            embed.add_field(name="Saldo", value=rekening['saldo'], inline=False)
+            embed.add_field(name="Currency", value=rekening['currency'], inline=False)
+
+            embed.add_field(name="Gebruiker ID", value=rekening_info['id'], inline=False)
+            embed.add_field(name="Naam", value=f"{rekening_info['voornaam']} {rekening_info['familienaam']}",
+                            inline=False)
+            embed.add_field(name="Email", value=rekening_info['email'], inline=False)
+            embed.add_field(name="Telefoonnummer", value=rekening_info['telefoonnummer'], inline=False)
+            embed.add_field(name="Geboortedatum", value=rekening_info['geboortedatum'], inline=False)
+
+            embed.add_field(name="Adres",
+                            value=f"{adres_info['straat']} {adres_info['huisnummer']}, {adres_info['postcode']}, {adres_info['gemeente']}, {adres_info['land']}",
+                            inline=False)
 
             if depth.content.isdigit() and int(depth.content) > 0:
                 transacties = rekening["transacties"]
                 if transacties:
-                    response += "\n\nTransacties:\n"
-                    for transactie in transacties[:int(depth.content)]:
+                    for i, transactie in enumerate(transacties[:int(depth.content)]):
                         transactie_type = transaction_types.get(transactie['transactieType'], 'Unknown')
-                        response += (
-                            f"\nTransactie ID: {transactie['transactieId']}\n"
-                            f"Bedrag: {transactie['bedrag']}\n"
-                            f"Datum: {transactie['datum']}\n"
-                            f"Omschrijving: {transactie['omschrijving']}\n"
-                            f"Transactie Type: {transactie_type}\n"
-                        )
+                        embed.add_field(name=f"Transactie {i + 1}", value=f"ID: {transactie['transactieId']}\n"
+                                                                          f"Bedrag: {transactie['bedrag']}\n"
+                                                                          f"Datum: {transactie['datum']}\n"
+                                                                          f"Omschrijving: {transactie['omschrijving']}\n"
+                                                                          f"Type: {transactie_type}", inline=False)
 
-            await ctx.send(response)
+            await ctx.send(embed=embed)
+            # response = (
+            #     f"Rekening Information:\n"
+            #     f"Rekening ID: {rekening['rekeningnummer']}\n"
+            #     f"Rekening Type: {rekening['rekeningType']}\n"
+            #     f"Kredietlimiet: {rekening['kredietLimiet']}\n"
+            #     f"Saldo: {rekening['saldo']}\n"
+            #     f"Currency: {rekening['currency']}\n\n"
+            #     f"Gebruiker Information:\n"
+            #     f"ID: {rekening_info['id']}\n"
+            #     f"Naam: {rekening_info['voornaam']} {rekening_info['familienaam']}\n"
+            #     f"Email: {rekening_info['email']}\n"
+            #     f"Telefoonnummer: {rekening_info['telefoonnummer']}\n"
+            #     f"Geboortedatum: {rekening_info['geboortedatum']}\n\n"
+            #     f"Adres Information:\n"
+            #     f"Straat: {adres_info['straat']} {adres_info['huisnummer']}\n"
+            #     f"Postcode: {adres_info['postcode']}\n"
+            #     f"Gemeente: {adres_info['gemeente']}\n"
+            #     f"Land: {adres_info['land']}"
+            # )
+            #
+            # if depth.content.isdigit() and int(depth.content) > 0:
+            #     transacties = rekening["transacties"]
+            #     if transacties:
+            #         response += "\n\nTransacties:\n"
+            #         for transactie in transacties[:int(depth.content)]:
+            #             transactie_type = transaction_types.get(transactie['transactieType'], 'Unknown')
+            #             response += (
+            #                 f"\nTransactie ID: {transactie['transactieId']}\n"
+            #                 f"Bedrag: {transactie['bedrag']}\n"
+            #                 f"Datum: {transactie['datum']}\n"
+            #                 f"Omschrijving: {transactie['omschrijving']}\n"
+            #                 f"Transactie Type: {transactie_type}\n"
+            #             )
+            #
+            # await ctx.send(response)
 
 
 @bot.command(
@@ -242,7 +352,7 @@ async def get(ctx):
 )
 async def transfer(ctx):
     if not isinstance(ctx.channel, discord.DMChannel):
-        await ctx.send("This command can only be used in DMs.")
+        await ctx.author.send("You can only use my commands in direct messages.")
         return
 
     token = user_tokens.get(ctx.author.id)
