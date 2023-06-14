@@ -500,17 +500,27 @@ async def add(ctx):
     gebruiker = token["gebruiker"]
 
     # Function to ask the user for input and check for "STOP"
-    async def ask_for_input(prompt):
+    async def ask_for_input(prompt, valid_responses=None):
         while True:
             await ctx.send(prompt)
             inputresponse = await bot.wait_for('message', check=lambda message: message.author == ctx.author)
             if inputresponse.content.upper() == 'STOP':
                 return None
-            if inputresponse.content:  # Here you can add more conditions to check the validity of the response
-                return inputresponse.content
-            await ctx.send("Invalid input. Please try again or type 'STOP' to cancel.")
+            if valid_responses:
+                if inputresponse.content.lower() in valid_responses:
+                    return valid_responses[inputresponse.content.lower()]
+                else:
+                    await ctx.send("Invalid input. Please try again or type 'STOP' to cancel.")
+            else:
+                if inputresponse.content:  # Here you can add more conditions to check the validity of the response
+                    return inputresponse.content
+                await ctx.send("Invalid input. Please try again or type 'STOP' to cancel.")
 
-    accounttype = await ask_for_input("Please enter the account type you'd like to make:")
+    # Map account types to numeric values
+    accounttype_map = {"zichtrekening": 0, "spaarrekening": 1}
+
+    accounttype = await ask_for_input("Please enter the account type you'd like to make (Zichtrekening/Spaarrekening):",
+                                      valid_responses=accounttype_map)
     if accounttype is None:
         return
 
@@ -540,7 +550,7 @@ async def add(ctx):
         'Authorization': f'Bearer {token}'
     }
 
-    response = requests.post(url, json=data, headers=headers)
+    response = requests.post(url, json=data)
     print(response.content)
     if response.ok:
         response_data = response.json()
